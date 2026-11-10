@@ -1,9 +1,10 @@
 """Fit seasonal MAXV and daily LAI via the current TIMESAT CLI.
 
-Supply aligned, unscaled MCD15A2H Lai_500m and raw FparLai_QC rasters.
+Supply aligned, unscaled MCD15A2H Lai_500m and binary QA rasters
+(1 = good observation, 0 = bad observation).
 Each input is a CLI image list (absolute raster paths with dates in their
-names) or a GeoTIFF stack with dated band descriptions. Limit inputs to the
-study pixels beforehand. Output is in physical LAI units on a 365-day grid.
+names) or a GeoTIFF stack with dated band descriptions. Pass --mask for
+aligned land cover (birch = 1). Output is in physical LAI units on a 365-day grid.
 """
 
 import argparse
@@ -19,24 +20,29 @@ def main():
     parser.add_argument("lai", type=Path)
     parser.add_argument("qc", type=Path)
     parser.add_argument("output", type=Path, help="new directory for both CLI runs")
+    parser.add_argument("--mask", type=Path, help="aligned binary birch mask")
+    parser.add_argument("--dates", type=Path, help="one acquisition date per line")
     parser.add_argument("--smooth", type=float, default=1000,
                         help="spline smoothing factor (4.1.4 sample setting: 1000)")
     args = parser.parse_args()
     if not math.isfinite(args.smooth) or args.smooth <= 0:
         parser.error("--smooth must be positive and finite")
-    for path in (args.lai, args.qc):
-        if not path.is_file():
+    for path in (args.lai, args.qc, args.mask, args.dates):
+        if path is not None and not path.is_file():
             parser.error(f"input file not found: {path}")
 
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
-    # Unlisted QA byte values receive zero weight in the CLI.
-    good_qc = [[q, 1] for q in range(256) if q & 1 == 0 and (q >> 3) & 3 == 0]
+    # The study QA is already binary: 1=good, 0=bad.
+    # Unlisted QA values receive zero weight in the CLI.
+    good_qc = [[1, 1]]
     for fit_name, method in (("double_logistic", 1), ("spline", 2)):
         peak_run = method == 1
         config = {
             "input": {"image_file_list": str(args.lai.resolve()),
-                      "quality_file_list": str(args.qc.resolve())},
+                      "quality_file_list": str(args.qc.resolve()),
+                      "lc_file": str(args.mask.resolve()) if args.mask else "",
+                      "tv_list": str(args.dates.resolve()) if args.dates else ""},
             "general": {
                 "scale": 0.1, "offset": 0, "p_ylu": [0, 10], "p_a": good_qc,
                 "p_ignoreday": 366, "p_outlier": 0, "p_davailwin": 45,

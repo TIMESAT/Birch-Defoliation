@@ -1,1 +1,4 @@
 .DS_Store
+/.venv/
+/data/local_inputs/
+/runs/
