@@ -1,8 +1,18 @@
-# Birch forest LAI with TIMESAT
+# Birch forest defoliation from MODIS LAI
 
-Fit MODIS birch forest leaf area index (LAI) with the [TIMESAT CLI](https://github.com/TIMESAT/TIMESAT-CLI). The double-logistic fit gives the peak LAI for each detected season. A separate spline fit gives daily LAI, including within-season declines during defoliation.
+How much leaf area does a birch forest lose during a moth outbreak, and how does that loss change from day to day? The study estimates daily defoliation at 500 m resolution by comparing each pixel’s leaf area index (LAI) with its LAI on the same day in reference years.
 
-## Install the CLI
+**Available in this repository.** `run_birch_lai.py` fits the two inputs to that analysis. A double-logistic fit yields the growing-season peak LAI used to detect outbreaks. A separate spline fit yields daily LAI and can follow a decline within the growing season. The script writes both products as GeoTIFFs.
+
+## From fitted LAI to daily defoliation
+
+The following steps describe the study method. They still require a separate analysis script. If you already have seasonal peak and daily fitted LAI on the same grid and calendar, you can start here and skip the TIMESAT installation and fitting steps below.
+
+1. **Select reference years for each pixel.** Over 2002–2020, select the 14 years with the highest annual growing-season peak LAI. Compute the mean and standard deviation of those 14 peaks.
+2. **Identify outbreak years.** For each pixel and year, subtract the reference mean from the annual peak and divide by the reference standard deviation. The study used a z-score threshold of −1.97 to flag unusually low peaks. The reference-year count and threshold were calibrated using field observations in Abisko in 2013.
+3. **Estimate daily defoliation.** For each day in a flagged year, average the fitted LAI for the corresponding day across that pixel’s 14 reference years. Equation 2 in the manuscript gives the signed ratio `(daily LAI − reference LAI) / reference LAI`. For example, a daily LAI of 3 against a reference of 4 gives −0.25, a 25% deficit.
+
+## Install the TIMESAT CLI for LAI fitting
 
 Open a terminal in the directory containing `run_birch_lai.py`. Create a Python 3.12 environment, then use pip to install the released CLI and its TIMESAT core dependency.
 
@@ -11,12 +21,6 @@ conda create -n birch-lai python=3.12 -y
 conda activate birch-lai
 python -m pip install timesat-cli==1.9.2 timesat==4.4.1
 python -m timesat_cli run --help
-```
-
-To install the development version directly from the official GitHub repository, use the following pip command in the same environment. Git must be installed.
-
-```sh
-python -m pip install --upgrade "git+https://github.com/TIMESAT/TIMESAT-CLI.git"
 ```
 
 Use `python -m pip show timesat-cli timesat` to record the installed versions. The example was tested with Python 3.12, timesat-cli 1.9.2 and timesat 4.4.1.
@@ -59,4 +63,4 @@ Choose a new output directory for each run. To try a different spline smoothing 
 | `spline/ST/` | Daily fitted LAI in physical units and associated QA rasters. Each year has 365 output dates. In leap years this configuration omits December 31. |
 | `double_logistic.json`, `spline.json` | The exact settings passed to the CLI for each fit. |
 
-The workflow ends at the fitted LAI products. Outbreak classification and daily defoliation ratios are downstream analyses. The current core and version 4.1.4 handle season detection and spline bounds differently. Numerical agreement with historical birch outputs still needs validation on the original pixels.
+The current core and version 4.1.4 handle season detection and spline bounds differently. Numerical agreement with historical birch outputs still needs validation on the original pixels.
