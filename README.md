@@ -10,7 +10,7 @@ The following steps describe the study method. They still require a separate ana
 
 1. **Select reference years for each pixel.** Over 2002–2020, select the 14 years with the highest annual growing-season peak LAI. Compute the mean and standard deviation of those 14 peaks.
 2. **Identify outbreak years.** For each pixel and year, subtract the reference mean from the annual peak and divide by the reference standard deviation. The study used a z-score threshold of −1.97 to flag unusually low peaks. The reference-year count and threshold were calibrated using field observations in Abisko in 2013.
-3. **Estimate daily defoliation.** For each day in a flagged year, average the fitted LAI for the corresponding day across that pixel’s 14 reference years. Equation 2 in the manuscript gives the signed ratio `(daily LAI − reference LAI) / reference LAI`. For example, a daily LAI of 3 against a reference of 4 gives −0.25, a 25% deficit.
+3. **Estimate daily defoliation.** Construct the normal daily spline (SP) curve for each pixel by averaging its daily spline fits across the 14 reference years, one day at a time. Compare each day in a flagged year with the corresponding value on that curve. Equation 2 in the manuscript gives the signed ratio `(daily LAI − reference LAI) / reference LAI`. For example, a daily LAI of 3 against a reference of 4 gives −0.25, a 25% deficit.
 
 ## Install the TIMESAT CLI for LAI fitting
 
@@ -23,37 +23,32 @@ python -m pip install timesat-cli==1.9.2 timesat==4.4.1
 python -m timesat_cli run --help
 ```
 
-Use `python -m pip show timesat-cli timesat` to record the installed versions. The example was tested with Python 3.12, timesat-cli 1.9.2 and timesat 4.4.1.
+Use `python -m pip show timesat-cli timesat` to record the installed versions. The command pins the versions used in the birch test run. CLI 1.9.2 accepts core versions `>=4.4.1,<4.5`.
 
-## Prepare the two inputs
+## Prepare the LAI and QA inputs
 
-The local birch mask is stored at
-[`data/masks/pft08_corine_orig_D2_country4_Poly2Rst_MODISgrid.tif`](data/masks/pft08_corine_orig_D2_country4_Poly2Rst_MODISgrid.tif).
-It was moved from the local `Jing` directory; the historical `cut_birch.txt`
-script identifies it as the birch forest mask and excludes pixels with value 0.
-The mask contains values 0 and 1 (retain 1), with 0 also declared as nodata.
-Its 9600 × 14400 grid covers a larger area than the raw 2400 × 2400 LAI tile.
-Align and crop it to the input raster grid before masking; use nearest-neighbor
-resampling if resampling is needed. The runner does not apply the mask itself.
+For tile `h18v02`, use the [aligned birch mask](data/masks/birch_mask_h18v02.tif). It identifies 564,352 birch pixels (value 1) on the 2400 × 2400 LAI grid. The [original mask](data/masks/pft08_corine_orig_D2_country4_Poly2Rst_MODISgrid.tif) covers a larger area.
 
-The cropped mask for the current raw LAI tile is
-[`data/masks/birch_mask_h18v02.tif`](data/masks/birch_mask_h18v02.tif).
-It matches the raw h18v02 LAI grid exactly (2400 × 2400 pixels), was generated
-using nearest-neighbor resampling, and retains 564,352 birch pixels with value 1.
-Value 0 is excluded/nodata. The original mask is preserved above.
-
-Use the unscaled MCD15A2H Collection 6 LAI and the study's binary QA layers on the same pixel grid and dates. QA value 1 means good data and 0 means bad data, as confirmed by the data owner. These QA rasters are already processed; do not interpret them as raw FparLai_QC bit fields. The preparation command below combines the aligned birch mask with each QA layer. Keep the stored integer LAI values. The script scales them by 0.1 and assigns weight 1 only to QA value 1; all other QA values receive weight 0.
-
-Supply one text file per layer, with one absolute path per line in chronological order. Include the acquisition date in each raster filename, for example `Lai_20120601.tif` and `QA_20120601.tif`. You can also supply two multiband GeoTIFFs with acquisition dates in their band descriptions.
-
-## Run the fits
+From the project directory, run this once with the folder containing the study's unscaled MCD15A2H Collection 6 LAI and binary QA TIFFs. Replace the example path with your data folder.
 
 ```sh
 python prepare_birch_inputs.py "path/to/raw_tif"
-python run_birch_lai.py data/local_inputs/lai.txt data/local_inputs/qa.txt results --dates data/local_inputs/dates.txt --mask data/masks/birch_mask_h18v02.tif
 ```
 
-Preparation pairs each Collection 6 LAI image with the QA file of the same granule. Each dated QA VRT reads the product of observation QA and the aligned birch mask. This gives every observation outside the birch area zero weight. Keep the source TIFFs and mask at their current locations, or regenerate the lists after moving them. The dates file uses acquisition dates from the MODIS AYYYYDDD field.
+The preparation script pairs each `_lai.tif` with the matching `_qa.tif`, checks their grids against the mask, and reads the acquisition date from the MODIS `AYYYYDDD` field. It writes `lai.txt`, `qa.txt`, and `dates.txt` under `data/local_inputs/`. For the study data, these lists contain 851 paired dates from 2002-07-04 through 2020-12-26.
+
+Each dated QA virtual raster (VRT) computes **birch mask × observation QA**. An observation receives weight 1 only where both values are 1. All observations outside the birch area receive weight 0. The fitting script scales stored LAI by 0.1. If you move the source TIFFs or mask, rerun preparation to update the references.
+
+## Run the fits
+
+With the input lists in place, activate the environment and run both fits from the project directory. The `--mask` option also supplies the aligned raster to TIMESAT as land cover. The prepared QA list enforces the birch boundary for both fits.
+
+```sh
+conda activate birch-lai
+python run_birch_lai.py data/local_inputs/lai.txt data/local_inputs/qa.txt runs/full_2002_2020 --dates data/local_inputs/dates.txt --mask data/masks/birch_mask_h18v02.tif
+```
+
+For already prepared inputs, the runner also accepts multiband GeoTIFFs with acquisition dates in the band descriptions. The QA bands must include the spatial mask to reproduce the study-area restriction.
 
 Choose a new output directory for each run. To try a different spline smoothing factor, append `--smooth VALUE`. The default of 1000 comes from a TIMESAT 4.1.4 example configuration.
 
@@ -62,5 +57,7 @@ Choose a new output directory for each run. To try a different spline smoothing 
 | `double_logistic/VPP/*_MAXV_*.tif` | Peak fitted LAI by year and season. Missing seasons have nodata values. |
 | `spline/ST/` | Daily fitted LAI in physical units and associated QA rasters. Each year has 365 output dates. In leap years this configuration omits December 31. |
 | `double_logistic.json`, `spline.json` | The exact settings passed to the CLI for each fit. |
+
+Both products retain the input grid. In a 4 × 4 window spanning the birch boundary (138 acquisitions, 2010–2012), all 1,095 daily LAI rasters and all six seasonal peak rasters contained NoData outside the mask.
 
 The current core and version 4.1.4 handle season detection and spline bounds differently. Numerical agreement with historical birch outputs still needs validation on the original pixels.
