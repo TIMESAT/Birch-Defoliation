@@ -52,6 +52,19 @@ For already prepared inputs, the runner also accepts multiband GeoTIFFs with acq
 
 Choose a new output directory for each run. To try a different spline smoothing factor, append `--smooth VALUE`. The default of 1000 comes from a TIMESAT 4.1.4 example configuration.
 
+### Fit only the Abisko field area
+
+Crop the prepared inputs to a 50 × 50 km square centred on Abisko Östra (68.34864° N, 18.83035° E). The square extends 25 km in each direction in UTM zone 34N. Both fits use the original MODIS grid and all 851 acquisition dates. Only birch pixels whose centres fall inside the square receive observation weights. [Centre coordinates](https://www.lanstrafik.se/en/stop/abisko-ostra/)
+
+```sh
+python prepare_birch_subset.py runs/abisko_50km_inputs --abisko-size-km 50
+python run_birch_lai.py runs/abisko_50km_inputs/lai.tif runs/abisko_50km_inputs/qa.tif runs/abisko_50km_2002_2020 --mask runs/abisko_50km_inputs/mask.tif
+```
+
+The first command creates dated LAI and masked QA stacks once. If these already exist, start with the second command.
+
+### Fit outputs
+
 | Output under the run directory | Contents |
 | --- | --- |
 | `double_logistic/VPP/*_MAXV_*.tif` | Peak fitted LAI by year and season. Missing seasons have nodata values. |
