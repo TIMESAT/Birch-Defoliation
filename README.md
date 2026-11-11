@@ -2,15 +2,37 @@
 
 How much leaf area does a birch forest lose during a moth outbreak, and how does that loss change from day to day? The study estimates daily defoliation at 500 m resolution by comparing each pixel’s leaf area index (LAI) with its LAI on the same day in reference years.
 
-**Available in this repository.** `run_birch_lai.py` fits the two inputs to that analysis. A double-logistic fit yields the growing-season peak LAI used to detect outbreaks. A separate spline fit yields daily LAI and can follow a decline within the growing season. The script writes both products as GeoTIFFs.
+`run_birch_lai.py` writes growing-season peak LAI (double-logistic fit) and daily LAI (spline fit). `select_birch_reference.py` uses the peaks to select reference years and flag outbreaks. `daily_birch_defoliation.py` combines those selections with daily LAI to calculate signed defoliation ratios.
 
 ## From fitted LAI to daily defoliation
 
-The following steps describe the study method. They still require a separate analysis script. If you already have seasonal peak and daily fitted LAI on the same grid and calendar, you can start here and skip the TIMESAT installation and fitting steps below.
+If you already have the TIMESAT peak and daily fitted LAI products on the same grid, you can run the following stages directly in the project environment.
 
 1. **Select reference years for each pixel.** Over 2002–2020, select the 14 years with the highest annual growing-season peak LAI. Compute the mean and standard deviation of those 14 peaks.
 2. **Identify outbreak years.** For each pixel and year, subtract the reference mean from the annual peak and divide by the reference standard deviation. The study used a z-score threshold of −1.97 to flag unusually low peaks. The reference-year count and threshold were calibrated using field observations in Abisko in 2013.
 3. **Estimate daily defoliation.** Construct the normal daily spline (SP) curve for each pixel by averaging its daily spline fits across the 14 reference years, one day at a time. Compare each day in a flagged year with the corresponding value on that curve. Equation 2 in the manuscript gives the signed ratio `(daily LAI − reference LAI) / reference LAI`. For example, a daily LAI of 3 against a reference of 4 gives −0.25, a 25% deficit.
+
+### Run the downstream stages
+
+For the Abisko 50 km run, execute these commands from the repository root in the `birch-lai` environment. Each command creates a new output directory.
+
+```sh
+python select_birch_reference.py runs/abisko_50km_2002_2020/double_logistic/VPP runs/abisko_50km_inputs/mask.tif runs/abisko_50km_2002_2020/annual
+python daily_birch_defoliation.py runs/abisko_50km_2002_2020/spline/ST runs/abisko_50km_2002_2020/annual runs/abisko_50km_2002_2020/daily
+```
+
+| Output | How to read it |
+| --- | --- |
+| `annual/annual_peak.tif` | One band per year, using the largest valid seasonal MAXV. |
+| `annual/reference_years.tif` | Year-labelled bands. For eligible pixels, 1 marks a selected year and 0 an unselected year. |
+| `annual/reference_peak_stats.tif` | Mean and standard deviation of the selected annual peaks. |
+| `annual/zscore.tif`, `annual/outbreak.tif` | Annual z-scores and flags. Flag 1 means the score is below the threshold, 0 means the score is at or above it. |
+| `daily/reference_sp.tif` | The reference LAI curve, with one band for each TIMESAT day of year (1–365). |
+| `daily/defoliation_YYYY.tif` | One dated band per day, populated only in flagged pixel-years. Values are signed fractions. Positive values indicate daily LAI above the reference. |
+
+The annual defaults are `--reference-count 14 --threshold -1.97 --ddof 1`. The implementation uses sample standard deviation (N−1), a strict threshold comparison, and earlier years first when peaks tie. A pixel needs at least 14 valid annual peaks. Zero standard deviation gives NoData for the z-score and outbreak flag. The annual directory records the settings used.
+
+The daily stage aligns years by ordinal day on the fitted 365-day calendar. Each day requires valid spline LAI in all selected reference years. The ratio also requires valid outbreak-year LAI and positive reference LAI. NoData is 255 for the two flag products and −9999 for floating-point outputs. Changes to the annual settings require rerunning both downstream stages.
 
 ## Install the TIMESAT CLI for LAI fitting
 
