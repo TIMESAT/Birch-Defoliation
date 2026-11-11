@@ -17,7 +17,7 @@ If you already have the TIMESAT peak and daily fitted LAI products on the same g
 For the Abisko 50 km run, execute these commands from the repository root in the `birch-lai` environment. Each command creates a new output directory.
 
 ```sh
-python select_birch_reference.py runs/abisko_50km_2002_2020/double_logistic/VPP runs/abisko_50km_inputs/mask.tif runs/abisko_50km_2002_2020/annual
+python select_birch_reference.py runs/abisko_50km_2002_2020/double_logistic/VPP data/abisko_50km/mask.tif runs/abisko_50km_2002_2020/annual
 python daily_birch_defoliation.py runs/abisko_50km_2002_2020/spline/ST runs/abisko_50km_2002_2020/annual runs/abisko_50km_2002_2020/daily
 ```
 
@@ -76,14 +76,13 @@ Choose a new output directory for each run. To try a different spline smoothing 
 
 ### Fit only the Abisko field area
 
-Crop the prepared inputs to a 50 × 50 km square centred on Abisko Östra (68.34864° N, 18.83035° E). The square extends 25 km in each direction in UTM zone 34N. Both fits use the original MODIS grid and all 851 acquisition dates. Only birch pixels whose centres fall inside the square receive observation weights. [Centre coordinates](https://www.lanstrafik.se/en/stop/abisko-ostra/)
+The repository includes a ready-to-run [Abisko test dataset](data/abisko_50km/) covering a 50 × 50 km square centred on Abisko Östra (68.34864° N, 18.83035° E, UTM zone 34N). The LAI and binary QA stacks each contain 851 dated bands from 2002-07-04 through 2020-12-26. All three GeoTIFFs share a 143 × 113 pixel grid. The mask selects 5,197 birch pixels inside the square, and the QA stack already excludes observations outside the mask. [Centre coordinates](https://www.lanstrafik.se/en/stop/abisko-ostra/)
 
 ```sh
-python prepare_birch_subset.py runs/abisko_50km_inputs --abisko-size-km 50
-python run_birch_lai.py runs/abisko_50km_inputs/lai.tif runs/abisko_50km_inputs/qa.tif runs/abisko_50km_2002_2020 --mask runs/abisko_50km_inputs/mask.tif
+python run_birch_lai.py data/abisko_50km/lai.tif data/abisko_50km/qa.tif runs/abisko_50km_2002_2020 --mask data/abisko_50km/mask.tif
 ```
 
-The first command creates dated LAI and masked QA stacks once. If these already exist, start with the second command.
+To regenerate the subset from prepared full-tile inputs, run `python prepare_birch_subset.py runs/abisko_50km_inputs --abisko-size-km 50`.
 
 ### Fit outputs
 
